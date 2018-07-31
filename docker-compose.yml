@@ -1,0 +1,32 @@
+version: '3.4'
+
+services:
+  prekeys-raw:
+    build: ./raw
+    command: -address 0.0.0.0 -port 30123 -identity ${PREKEY_SERVER_IDENTITY} -key-file /secrets/server.keys -storage dir:/keys
+    volumes:
+      - type: bind
+        source: ./secrets
+        target: /secrets
+      - type: bind
+        source: ./keys
+        target: /keys
+    expose:
+      - "30123"
+
+  prekeys-xmpp:
+    build: ./xmpp
+    command: -raw-address prekeys-raw -raw-port 30123 -xmpp-address xmpp-bridge -xmpp-port 31123 -shared-secret ${XMPP_COMPONENTS_SECRET} -name $PREKEY_SERVER_IDENTITY -fingerprint ${PREKEY_SERVER_FINGERPRINT}
+    depends_on:
+      - prekeys-raw
+      - xmpp-bridge
+
+  xmpp-bridge:
+    image: alpine/socat
+    command: -d -d -d tcp-listen:31123,fork,reuseaddr unix-connect:/xmpp-components.sock
+    expose:
+      - "31123"
+    volumes:
+      - type: bind
+        source: /run/prosody-components.sock
+        target: /xmpp-components.sock
